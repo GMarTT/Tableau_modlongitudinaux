@@ -95,6 +95,8 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     sigma1 = numeric(),
     sigma2 = numeric(),
     phi = numeric(),
+    p.value_LL_res = numeric(),
+    p.value_BP_res = numeric(),
     stringsAsFactors = FALSE
   )
   i <- 1
@@ -170,6 +172,20 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     varce <- VarCorr(mod)
     Tab2[i, "sigma1"] <- round(as.numeric(varce[1,2]), 2)
     Tab2[i, "sigma2"] <- round(as.numeric(varce[2,2]), 2)
+    # test de Durbin-Watson pour autocorrélation des résidus
+    # dw <- lmtest::dwtest(mod)
+    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    # Tab2[i, "p.value_DW_res"] <- dwp
+    # test de Lilliefors pour la normalité résiduelle
+    ll <- nortest::lillie.test(mod$residuals)
+    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value,2))
+    Tab2[i, "p.value_LL_res"] <- llp
+    # test de Breusch-Pagan pour l'hétéroscédasticité
+    res <- resid(mod, type = "pearson")
+    fit <- fitted(mod)
+    bp <- lmtest::bptest(res ~ fit)
+    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, 2))
+    Tab2[i, "p.value_BP_res"] <- bpp
     i <- i+1  
   }
   
@@ -190,6 +206,8 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     p.value_betaX2 = numeric(),
     sigma = numeric(),
     phi = numeric(),
+    p.value_LL_res = numeric(),
+    p.value_BP_res = numeric(),
     stringsAsFactors = FALSE
   )
   i <- 1
@@ -258,6 +276,20 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     }
     Tab3[i, "phi"] <- round(coef(mod$modelStruct$corStruct, unconstrained = FALSE), 2)
     Tab3[i, "sigma"] <- round(as.numeric(summary(mod)$sigma), 2)
+    # test de Durbin-Watson pour autocorrélation des résidus
+    # dw <- lmtest::dwtest(mod)
+    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    # Tab3[i, "p.value_DW_res"] <- dwp
+    # test de Lilliefors pour la normalité résiduelle
+    ll <- nortest::lillie.test(mod$residuals)
+    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value,2))
+    Tab3[i, "p.value_LL_res"] <- llp
+    # test de Breusch-Pagan pour l'hétéroscédasticité
+    res <- resid(mod, type = "pearson")
+    fit <- fitted(mod)
+    bp <- lmtest::bptest(res ~ fit)
+    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, 2))
+    Tab3[i, "p.value_BP_res"] <- bpp
     i <- i+1  
   }
   
@@ -281,5 +313,5 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
 }
 
 # test
-results_model(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", model = "GEE")
+results_model(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", model = "GLS")
 
