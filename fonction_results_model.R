@@ -1,3 +1,5 @@
+Y <- "AMR_EHPAD_FQ_R"
+
 results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_common_variables = FALSE){
   
   #--------------------
