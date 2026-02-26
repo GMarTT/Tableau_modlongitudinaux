@@ -14,6 +14,7 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     betaX2 = numeric(),
     p.value_betaX2 = numeric(),
     phi = numeric(),
+    p.value_DW_res = numeric(),
     stringsAsFactors = FALSE
   )
   i <- 1
@@ -69,6 +70,10 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
       Tab[i, "p.value_betaX2"] <- round(coef_tab[3,2],2)
     }
     Tab[i, "phi"] <- round(mod$geese$alpha, 2)
+    # test de durbin-watson pour autocorrélation des résidus
+    dw <- lmtest::dwtest(mod)
+    dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    Tab[i, "p.value_DW_res"] <- dwp
     i <- i+1  
   }
   
@@ -274,3 +279,7 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
   if (model == "GLS") return(DT::datatable(Tab3_show))
   
 }
+
+# test
+results_model(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", model = "GEE")
+
