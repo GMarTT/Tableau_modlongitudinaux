@@ -1,6 +1,7 @@
 Y <- "AMR_EHPAD_FQ_R"
 
-results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_common_variables = FALSE){
+results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_common_variables = FALSE, 
+                          digits = 2){
   
   #--------------------
   # GEE
@@ -63,16 +64,16 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     
     # extraire les betas et leur p-value 
     coef_tab <- summary(mod)$coefficients[, c("Estimate", "Pr(>|W|)")]  
-    Tab[i, "betaX"] <- round(coef_tab[2,1],2)
-    Tab[i, "p.value_betaX"] <- round(coef_tab[2,2],2)
+    Tab[i, "betaX"] <- round(coef_tab[2,1], digits = digits)
+    Tab[i, "p.value_betaX"] <- round(coef_tab[2,2], digits = digits)
     if (identical(mod, out.gee2)){
-      Tab[i, "betaX2"] <- round(coef_tab[3,1],2)
-      Tab[i, "p.value_betaX2"] <- round(coef_tab[3,2],2)
+      Tab[i, "betaX2"] <- round(coef_tab[3,1], digits = digits)
+      Tab[i, "p.value_betaX2"] <- round(coef_tab[3,2], digits = digits)
     }
-    Tab[i, "phi"] <- round(mod$geese$alpha, 2)
+    Tab[i, "phi"] <- round(mod$geese$alpha, digits = digits)
     # test de durbin-watson pour autocorrélation des résidus
     dw <- lmtest::dwtest(mod)
-    dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value, digits = digits))
     Tab[i, "p.value_DW_res"] <- dwp
     i <- i+1  
   }
@@ -162,29 +163,29 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     } else if (inherits(mod, "lm")) {
       coef_Tab2 <- summary(mod)$coefficients[, c("Estimate", "Pr(>|t|)")]
     } 
-    Tab2[i, "betaX"] <- round(coef_Tab2[2,1],2)
-    Tab2[i, "p.value_betaX"] <- round(coef_Tab2[2,2],2)
+    Tab2[i, "betaX"] <- round(coef_Tab2[2,1], digits = digits)
+    Tab2[i, "p.value_betaX"] <- round(coef_Tab2[2,2], digits = digits)
     if (identical(mod, out.lmm2)){
-      Tab2[i, "betaX2"] <- round(coef_Tab2[3,1],2)
-      Tab2[i, "p.value_betaX2"] <- round(coef_Tab2[3,2],2)
+      Tab2[i, "betaX2"] <- round(coef_Tab2[3,1], digits = digits)
+      Tab2[i, "p.value_betaX2"] <- round(coef_Tab2[3,2], digits = digits)
     }
-    Tab2[i, "phi"] <- round(coef(mod$modelStruct$corStruct, unconstrained = FALSE), 2)
+    Tab2[i, "phi"] <- round(coef(mod$modelStruct$corStruct, unconstrained = FALSE), digits = digits)
     varce <- VarCorr(mod)
-    Tab2[i, "sigma1"] <- round(as.numeric(varce[1,2]), 2)
-    Tab2[i, "sigma2"] <- round(as.numeric(varce[2,2]), 2)
+    Tab2[i, "sigma1"] <- round(as.numeric(varce[1,2]), digits = digits)
+    Tab2[i, "sigma2"] <- round(as.numeric(varce[2,2]), digits = digits)
     # test de Durbin-Watson pour autocorrélation des résidus
     # dw <- lmtest::dwtest(mod)
-    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value, digits = digits))
     # Tab2[i, "p.value_DW_res"] <- dwp
     # test de Lilliefors pour la normalité résiduelle
     ll <- nortest::lillie.test(mod$residuals)
-    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value,2))
+    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value, digits = digits))
     Tab2[i, "p.value_LL_res"] <- llp
     # test de Breusch-Pagan pour l'hétéroscédasticité
     res <- resid(mod, type = "pearson")
     fit <- fitted(mod)
     bp <- lmtest::bptest(res ~ fit)
-    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, 2))
+    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, digits = digits))
     Tab2[i, "p.value_BP_res"] <- bpp
     i <- i+1  
   }
@@ -268,27 +269,27 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
     } else if (inherits(mod, "lm")) {
       coef_Tab3 <- summary(mod)$coefficients[, c("Estimate", "Pr(>|t|)")]
     } 
-    Tab3[i, "betaX"] <- round(coef_Tab3[2,1],2)
-    Tab3[i, "p.value_betaX"] <- round(coef_Tab3[2,2],2)
+    Tab3[i, "betaX"] <- round(coef_Tab3[2,1], digits = digits)
+    Tab3[i, "p.value_betaX"] <- round(coef_Tab3[2,2], digits = digits)
     if (identical(mod, out.gls2)){
-      Tab3[i, "betaX2"] <- round(coef_Tab3[3,1],2)
-      Tab3[i, "p.value_betaX2"] <- round(coef_Tab3[3,2],2)
+      Tab3[i, "betaX2"] <- round(coef_Tab3[3,1], digits = digits)
+      Tab3[i, "p.value_betaX2"] <- round(coef_Tab3[3,2], digits = digits)
     }
-    Tab3[i, "phi"] <- round(coef(mod$modelStruct$corStruct, unconstrained = FALSE), 2)
-    Tab3[i, "sigma"] <- round(as.numeric(summary(mod)$sigma), 2)
+    Tab3[i, "phi"] <- round(coef(mod$modelStruct$corStruct, unconstrained = FALSE), digits = digits)
+    Tab3[i, "sigma"] <- round(as.numeric(summary(mod)$sigma), digits = digits)
     # test de Durbin-Watson pour autocorrélation des résidus
     # dw <- lmtest::dwtest(mod)
-    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value,2))
+    # dwp <- ifelse(dw$p.value < 0.001, "<0.001", round(dw$p.value, digits = digits))
     # Tab3[i, "p.value_DW_res"] <- dwp
     # test de Lilliefors pour la normalité résiduelle
     ll <- nortest::lillie.test(mod$residuals)
-    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value,2))
+    llp <- ifelse(ll$p.value < 0.001, "<0.001", round(ll$p.value, digits = digits))
     Tab3[i, "p.value_LL_res"] <- llp
     # test de Breusch-Pagan pour l'hétéroscédasticité
     res <- resid(mod, type = "pearson")
     fit <- fitted(mod)
     bp <- lmtest::bptest(res ~ fit)
-    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, 2))
+    bpp <- ifelse(bp$p.value < 0.001, "<0.001", round(bp$p.value, digits = digits))
     Tab3[i, "p.value_BP_res"] <- bpp
     i <- i+1  
   }
@@ -313,5 +314,5 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
 }
 
 # test
-results_model(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", model = "GLS")
+results_model(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", model = "GLS", digits = 4)
 
