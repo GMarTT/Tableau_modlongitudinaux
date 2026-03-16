@@ -2,6 +2,7 @@ library(car)
 library(MASS)
 library(tidyverse)
 library(openxlsx)
+library(FonctionsUtiles)
 
 dat <- openxlsx::read.xlsx("C:/Users/g.martet/Documents/updatedata/dat.xlsx")
 var_to_test <- colnames(dat %>%
@@ -65,8 +66,7 @@ rrmse <- function(mod, y){
 
 results_model2 <- function(var_to_test, Y, 
                            save_excel = FALSE,
-                           criteria = "RMSE",
-                           digits = 2){
+                           criteria = "RMSE"){
 
 Tab <- data.frame(
     variable = character(),
@@ -348,7 +348,6 @@ for (j in var_to_test){
 
   
   ### GEE
-  d$X <- scale(d[[j]], center = TRUE, scale = FALSE)
   if (var(d$X, na.rm = TRUE) < 1e-10) next         # Fix 3
   mm1 <- model.matrix(form1, data = d)
   if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  # Fix 1
@@ -445,14 +444,18 @@ for (j in var_to_test){
         Tab2 <- rbind.data.frame(Tab2, df2)
         Tab <- rbind.data.frame(Tab, df1)
       }
-    }
+}
+
+if (save_excel == TRUE){
+  FonctionsUtiles::save_datasets_to_excel(datasets = list("summary" = Tab, "quality" = Tab2),
+                                          file_name = paste0("C:/Users/g.martet/Documents/firstexploration/sel_var2_Y_", Y,".xlsx"))}
   
   return(list(Tab, Tab2))
 }
 
      
 # test
-res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_ville_FQ_R")
+res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", save_excel = TRUE)
 a <- res2[[1]]
 View(a)
 resb <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R")
