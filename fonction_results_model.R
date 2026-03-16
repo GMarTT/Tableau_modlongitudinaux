@@ -3,9 +3,9 @@ Y <- "AMR_EHPAD_FQ_R"
 results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_common_variables = FALSE, 
                           digits = 2){
   
-  #--------------------
-  # GEE
-  #--------------------
+#--------------------
+# GEE
+#--------------------
   
   Tab <- data.frame(
     variable = character(),
@@ -193,11 +193,11 @@ results_model <- function(var_to_test, Y, model, save_excel = FALSE, print_commo
   Tab2_show <- Tab2 %>% 
     dplyr::filter(p.value_betaX < 0.05)
   
-  #----------------------
-  # GLS
-  #----------------------
+#----------------------
+# GLS
+#----------------------
   
-  Tab3 <- data.frame(
+Tab3 <- data.frame(
     variable = character(),
     random_effect = character(),
     forme = character(),
