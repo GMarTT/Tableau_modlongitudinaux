@@ -51,6 +51,18 @@ rmse <- function(mod, y){
   return(sqrt((1/n)*sum((y-py)^2)))
 }
 
+# RRMSE
+rrmse <- function(mod, y){
+  n <- length(y)
+  py <- predict(mod)
+  if (length(py) != length(y)){
+    stop("Y et predict(mod) doivent être de la même longueur")
+  }
+  rmse <- sqrt((1/n)*sum((y-py)^2))
+  rrmse <- rmse/sd(y)
+  return(rrmse)
+}
+
 results_model2 <- function(var_to_test, Y, 
                            save_excel = FALSE,
                            criteria = "RMSE",
@@ -86,7 +98,7 @@ Tab2 <- data.frame(
 
 #i <- 1 
 for (j in var_to_test){
-  print(j)
+  #print(j)
   d <- dat[, c(Y, "annee", "region", j)]
   d <- d[complete.cases(d), ]
   
@@ -130,8 +142,8 @@ for (j in var_to_test){
       if (any(!is.finite(Xtmp))) next   
       if (sd(Xtmp, na.rm = TRUE) == 0) next
       
-      d$X <- Xtmp
-      d$X <- Xtmp - mean(Xtmp, na.rm = TRUE)          
+      d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
+      
       if (var(d$X, na.rm = TRUE) < 1e-10) next 
       mm1 <- model.matrix(form1, data = d)
       if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  
@@ -245,8 +257,8 @@ for (j in var_to_test){
     if (any(!is.finite(Xtmp))) next  
     if (sd(Xtmp, na.rm = TRUE) == 0) next
     
-    d$X <- Xtmp
-    d$X <- Xtmp - mean(Xtmp, na.rm = TRUE)          
+    d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
+    
     if (var(d$X, na.rm = TRUE) < 1e-10) next         
     mm1 <- model.matrix(form1, data = d)
     if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  
@@ -385,7 +397,8 @@ for (j in var_to_test){
         best_model.3 <- mod
         model_type <- "GEE"
         
-        coef_Tab <- summary(mod)$coefficients[, c("Estimate", "Pr(>|W|)")]
+        coef_Tab <- as.data.frame(summary(mod)$coefficients[, c("Estimate", "Pr(>|W|)")])
+        #print(coef_Tab$`Pr(>|W|)`)
         df1.GEE <- data.frame(
           variable = j,
           model_choosen = "GEE",
@@ -439,9 +452,33 @@ for (j in var_to_test){
 
      
 # test
-res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_ES_FQ_R")
-View(res2[[1]])
+res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_ville_FQ_R")
+a <- res2[[1]]
+View(a)
+resb <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R")
+b <- resb[[1]]
+View(b)
+
+setdiff(var_to_test, res2[[1]]$variable)
 
 quality <- res2[[2]]
 View(quality)
 boxplot(quality$RMSE)
+
+quality %>% 
+  ggplot(aes(x = 1, y = RMSE)) +
+  geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+  geom_point(aes(group = variable),
+             width = 0.1,
+             show.legend = FALSE, 
+             position = position_dodge(0.9)) +
+  geom_text(data = quality %>% dplyr::filter(RMSE > 20), 
+            aes(group = variable, label = variable),
+            hjust = -0.1,
+            show.legend = FALSE,
+            position = position_dodge(0.9)) +
+  theme_bw()
+  
+summary(quality$RMSE)  
+  
+  
