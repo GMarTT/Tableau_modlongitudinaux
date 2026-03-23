@@ -3,44 +3,46 @@ library(MASS)
 library(tidyverse)
 library(openxlsx)
 library(FonctionsUtiles)
+library(bestNormalize)
+library(nlme)
 
-dat <- openxlsx::read.xlsx("C:/Users/g.martet/Documents/updatedata/dat.xlsx")
-var_to_test <- colnames(dat %>%
-                          dplyr::select(-annee, -region, -dplyr::contains("AMR_")))
-
-j <- "log_AMC_ville_penicillines"
-Y <- "AMR_EHPAD_FQ_R"
-d <- dat[, c(Y, "annee", "region", j)]
-d <- d[complete.cases(d), ]
-x <- d[[j]]
+# dat <- openxlsx::read.xlsx("C:/Users/g.martet/Documents/updatedata/dat.xlsx")
+# var_to_test <- colnames(dat %>%
+#                           dplyr::select(-annee, -region, -dplyr::contains("AMR_")))
+# 
+# j <- "log_AMC_ville_penicillines"
+# Y <- "AMR_EHPAD_FQ_R"
+# d <- dat[, c(Y, "annee", "region", j)]
+# d <- d[complete.cases(d), ]
+# x <- d[[j]]
 
 # fonction boxcox
-transf_boxcox <- function(x){
-  if (is.null(x) || length(x) == 0) return(NULL)
-  if (any(x <= 0, na.rm = TRUE)) return(rep(NA, length(x)))
-  bc <- MASS::boxcox(lm(x ~ 1), plotit = FALSE)
-  lambda <- bc$x[which.max(bc$y)]
-  if (abs(lambda) < 1e-6){
-    x_boxcox <- log(x)
-  } else {
-    x_boxcox <- (x^lambda - 1) / lambda
-  }
-  return(x_boxcox)
-}
-
-hist(transf_boxcox(x))
-
-# transformation yeo-johnson
-transf_yeo_johnson <- function(x){
-yj <- car::powerTransform(x, family="yjPower")
-x_yj <- car::yjPower(x, coef(yj))
-return(x_yj)}
-
-# transformation INT rank-based
-transf_INT <- function(x){
-  n <- length(x)
-  x_int <- qnorm((rank(x, na.last="keep") - 0.5) / n)
-  return(x_int)}
+# transf_boxcox <- function(x){
+#   if (is.null(x) || length(x) == 0) return(NULL)
+#   if (any(x <= 0, na.rm = TRUE)) return(rep(NA, length(x)))
+#   bc <- MASS::boxcox(lm(x ~ 1), plotit = FALSE)
+#   lambda <- bc$x[which.max(bc$y)]
+#   if (abs(lambda) < 1e-6){
+#     x_boxcox <- log(x)
+#   } else {
+#     x_boxcox <- (x^lambda - 1) / lambda
+#   }
+#   return(x_boxcox)
+# }
+# 
+# #hist(transf_boxcox(x))
+# 
+# # transformation yeo-johnson
+# transf_yeo_johnson <- function(x){
+# yj <- car::powerTransform(x, family="yjPower")
+# x_yj <- car::yjPower(x, coef(yj))
+# return(x_yj)}
+# 
+# # transformation INT rank-based
+# transf_INT <- function(x){
+#   n <- length(x)
+#   x_int <- qnorm((rank(x, na.last="keep") - 0.5) / n)
+#   return(x_int)}
 
 # RMSE
 rmse <- function(mod, y){
@@ -96,33 +98,50 @@ Tab2 <- data.frame(
   RMSE = numeric()
 )
 
+Tab3 <- data.frame(
+  variable = character(),
+  model = character(),
+  forme = character(),
+  transformation = character(),
+  p.value_DW_res = numeric(),
+  p.value_JB_res = numeric(),
+  p.value_BP_res = numeric(),
+  p.value_JB_random_res = numeric(),
+  respect_assumption = character(),
+  AIC = numeric(),
+  RMSE = numeric()
+)
+
 #i <- 1 
 for (j in var_to_test){
-  #print(j)
   d <- dat[, c(Y, "annee", "region", j)]
   d <- d[complete.cases(d), ]
+  
+  # normalisation du Y
+  #print(j)
+  normal_y <- bestNormalize::bestNormalize(d[[Y]])
+  d$Y_norm <- predict(normal_y)
+  t <- names(which.min(normal_y$norm_stats))
   
   if (nrow(d) < 3) next
   if (sd(d[[j]]) == 0) next
   if (sd(d[[Y]]) == 0) next
   
   # transformation et hypothèses
-  if (startsWith(j, "log_")){d[[j]] <- exp(d[[j]])}
-  transfos <- list(
-    none = function(x) x,
-    log = function(x) log(x),
-    sqrt = function(x) sqrt(x),
-    sinhlog = function(x) log(sinh(x)),
-    boxcox = function(x) transf_boxcox(x),
-    yeojohnson = function(x) transf_yeo_johnson(x),
-    INT = function(x) transf_INT(x)
-  )
+  #if (startsWith(j, "log_")){d[[j]] <- exp(d[[j]])}
+  # transfos <- list(
+  #   none = function(x) x,
+  #   log = function(x) log(x),
+  #   sqrt = function(x) sqrt(x),
+  #   sinhlog = function(x) log(sinh(x)),
+  #   boxcox = function(x) transf_boxcox(x),
+  #   yeojohnson = function(x) transf_yeo_johnson(x),
+  #   INT = function(x) transf_INT(x)
+  # )
   
   # les formulas
-  form1 <- as.formula(paste0(Y, " ~ X"))
-  form2 <- as.formula(paste0(Y, " ~ X + I(X^2)"))
-  
-  found_model <- FALSE
+  form1 <- as.formula(paste0("Y_norm ~ X"))
+  form2 <- as.formula(paste0("Y_norm ~ X + I(X^2)"))
   
   # stocker les modèles
   valid_models <- list()
@@ -130,11 +149,8 @@ for (j in var_to_test){
   model_param <- data.frame()
   
   ### LMM
-  for (t in names(transfos)) {
-      Xtmp <- tryCatch(
-        transfos[[t]](d[[j]]),
-        error = function(e) NULL
-      )
+  
+      Xtmp <- d[[j]]
       
       if (is.null(Xtmp)) next
       if (length(Xtmp) == 0) next
@@ -142,8 +158,9 @@ for (j in var_to_test){
       if (any(!is.finite(Xtmp))) next   
       if (sd(Xtmp, na.rm = TRUE) == 0) next
       
-      d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
-      
+      #d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
+      d$X <- Xtmp
+  
       if (var(d$X, na.rm = TRUE) < 1e-10) next 
       mm1 <- model.matrix(form1, data = d)
       if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  
@@ -158,8 +175,7 @@ for (j in var_to_test){
       method = "REML"),
       error = function(e) NULL
       )
-    
-    if(is.null(out.lmm1)) next
+    #print(summary(out.lmm1))
     
     out.lmm2 <- tryCatch(nlme::lme(
       form2,
@@ -170,124 +186,16 @@ for (j in var_to_test){
       error = function(e) NULL
       )
     
-    if(is.null(out.lmm2)) next
+    #print(summary(out.lmm2))
     
-    # test du modèle
-    aov <- anova(out.lmm2, out.lmm1)
-    
-    #choix de modèle
-    mod <- out.lmm1
-    if (aov$`p-value`[2] < 0.05) {
-      mod <- out.lmm2
-    }
-    
-    ## Hypothèses
-    # test de Jarque-Bera pour la normalité résiduelle
-    jb <- tseries::jarque.bera.test(resid(mod))
-    jb.p <- jb$p.value
-    
-    # test de breush-pagan pour l'homoscédasticité
-    res <- resid(mod, type = "pearson")
-    fit <- fitted(mod)
-    bp <- lmtest::bptest(res ~ fit)
-    bp.p <- bp$p.value
-    
-    # durbin-watson pour l'indep des résidus
-    res <- resid(mod)
-    dw <- lmtest::dwtest(res ~ 1)
-    dw.p <- dw$p.value
-    
-    # Test de normalité des residus des random effects
-    resid.intercept <- ranef(mod)[["(Intercept)"]]
-    jb.rand <- tseries::jarque.bera.test(resid.intercept)
-    jb.rand.p <- jb.rand$p.value
-    
-    if (bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05 & jb.rand.p > 0.05){
-      #message(j, "Transformation retenue (LMM) : ", t)
-      best_model.1 <- mod
-      model_type <- "LMM"
-      found_model <- TRUE
-      
-      coef_Tab <- summary(best_model.1)$tTable[, c("Value", "p-value")]
-      varce <- VarCorr(best_model.1)
-      df1.LMM <- data.frame(
-        variable = j,
-        model_choosen = "LMM",
-        forme = ifelse(identical(best_model.1, out.lmm2), "quadratique", "lineaire"),
-        transformation = t,
-        betaX = coef_Tab[2,1],
-        p.value_betaX = coef_Tab[2,2],
-        betaX2 = ifelse(identical(best_model.1, out.lmm2), coef_Tab[3,1], NA),
-        p.value_betaX2 = ifelse(identical(best_model.1, out.lmm2), coef_Tab[3,2], NA),
-        phi = coef(best_model.1$modelStruct$corStruct, unconstrained = FALSE),
-        sigma_ind = as.numeric(varce[1,2]),
-        sigma_res = as.numeric(varce[2,2]),
-        stringsAsFactors = FALSE
-      )
-      
-      df2.LMM <- data.frame(
-        variable = j,
-        model = "LMM",
-        transformation = t,
-        p.value_DW_res = dw.p,
-        p.value_JB_res = jb.p,
-        p.value_BP_res = bp.p,
-        p.value_JB_random_res = jb.rand.p,
-        respect_assumption = ifelse(bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05 & jb.rand.p > 0.05, "Yes", "No"),
-        AIC = stats::AIC(mod),
-        RMSE = rmse(mod, d[[j]])
-      )
-      
-      model_stats <- rbind(model_stats, df2.LMM)
-      model_param <- rbind(model_param, df1.LMM)
-    }
-  
-  }
-  
-  ### GLS
-  for (t in names(transfos)) {
-    Xtmp <- tryCatch(
-      transfos[[t]](d[[j]]),
-      error = function(e) NULL
-    )
-    
-    if (is.null(Xtmp)) next
-    if (length(Xtmp) == 0) next
-    if (all(is.na(Xtmp))) next
-    if (any(!is.finite(Xtmp))) next  
-    if (sd(Xtmp, na.rm = TRUE) == 0) next
-    
-    d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
-    
-    if (var(d$X, na.rm = TRUE) < 1e-10) next         
-    mm1 <- model.matrix(form1, data = d)
-    if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  
-    mm2 <- model.matrix(form2, data = d)
-    if (kappa(t(mm2) %*% mm2, exact = TRUE) > 1e12) next
-      
-      out.gls1 <- tryCatch(nlme::gls(
-        form1,
-        data = d,
-        correlation = corAR1(form = ~ annee | region)),
-        error = function(e) NULL)
-      
-      if(is.null(out.gls1)) next
-      
-      out.gls2 <- tryCatch(nlme::gls(
-        form2,
-        data = d, 
-        correlation = corAR1(form = ~ annee | region)),
-        error = function(e) NULL)
-      
-      if (is.null(out.gls2)) next
-      
+    if(!is.null(out.lmm1) && !is.null(out.lmm2)) {
       # test du modèle
-      aov <- anova(out.gls2, out.gls1)
+      aov <- anova(out.lmm2, out.lmm1)
       
       #choix de modèle
-      mod <- out.gls1
+      mod <- out.lmm1
       if (aov$`p-value`[2] < 0.05) {
-        mod <- out.gls2
+        mod <- out.lmm2
       }
       
       ## Hypothèses
@@ -306,30 +214,167 @@ for (j in var_to_test){
       dw <- lmtest::dwtest(res ~ 1)
       dw.p <- dw$p.value
       
-      if (bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05){
-        best_model.2 <- mod
-        model_type <- "GLS"
-        found_model <- TRUE
+      # Test de normalité des residus des random effects
+      resid.intercept <- ranef(mod)[["(Intercept)"]]
+      jb.rand <- tseries::jarque.bera.test(resid.intercept)
+      jb.rand.p <- jb.rand$p.value
+      
+      # print(c(transfo = t, jb = jb.p, bp = bp.p, dw = dw.p, jb_rand = jb.rand.p))
+      if (bp.p > 0.05 & jb.p > 0.05 & jb.rand.p > 0.05){
+        #message(j, "Transformation retenue (LMM) : ", t)
+        best_model.1 <- mod
+        model_type <- "LMM"
         
-        coef_Tab <- summary(best_model.2)$tTable[, c("Value", "p-value")]
-        df1.GLS <- data.frame(
+        coef_Tab <- summary(best_model.1)$tTable[, c("Value", "p-value")]
+        varce <- VarCorr(best_model.1)
+        df1.LMM <- data.frame(
           variable = j,
-          model_choosen = "GLS",
-          forme = ifelse(identical(best_model.2, out.gls2), "quadratique", "lineaire"),
+          model_choosen = "LMM",
+          forme = ifelse(identical(best_model.1, out.lmm2), "quadratique", "lineaire"),
           transformation = t,
           betaX = coef_Tab[2,1],
           p.value_betaX = coef_Tab[2,2],
-          betaX2 = ifelse(identical(best_model.2, out.gls2), coef_Tab[3,1], NA),
-          p.value_betaX2 = ifelse(identical(best_model.2, out.gls2), coef_Tab[3,2], NA),
-          phi = coef(best_model.2$modelStruct$corStruct, unconstrained = FALSE),
-          sigma_ind = NA,
-          sigma_res = as.numeric(summary(mod)$sigma),
+          betaX2 = ifelse(identical(best_model.1, out.lmm2), coef_Tab[3,1], NA),
+          p.value_betaX2 = ifelse(identical(best_model.1, out.lmm2), coef_Tab[3,2], NA),
+          phi = coef(best_model.1$modelStruct$corStruct, unconstrained = FALSE),
+          sigma_ind = as.numeric(varce[1,2]),
+          sigma_res = as.numeric(varce[2,2]),
           stringsAsFactors = FALSE
         )
         
-        df2.GLS <- data.frame(
+        df2.LMM <- data.frame(
+          variable = j,
+          model = "LMM",
+          transformation = t,
+          p.value_DW_res = dw.p,
+          p.value_JB_res = jb.p,
+          p.value_BP_res = bp.p,
+          p.value_JB_random_res = jb.rand.p,
+          respect_assumption = ifelse(bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05 & jb.rand.p > 0.05, "Yes", "No"),
+          AIC = stats::AIC(mod),
+          RMSE = rmse(mod, d[[j]])
+        )
+        
+        model_stats <- rbind(model_stats, df2.LMM)
+        model_param <- rbind(model_param, df1.LMM)
+      }
+      
+      df3.LMM <- data.frame(
+        variable = j,
+        model = "LMM",
+        forme = ifelse(identical(mod, out.lmm2), "quadratique", "lineaire"),
+        transformation = t,
+        p.value_DW_res = dw.p,
+        p.value_JB_res = jb.p,
+        p.value_BP_res = bp.p,
+        p.value_JB_random_res = jb.rand.p,
+        respect_assumption = ifelse(bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05 & jb.rand.p > 0.05, "Yes", "No"),
+        AIC = stats::AIC(mod),
+        RMSE = rmse(mod, d$Y_norm)
+      )
+      Tab3 <- rbind(Tab3, df3.LMM)
+      
+    }
+    
+  ### GLS
+  
+    Xtmp <- d[[j]]
+    
+    if (is.null(Xtmp)) next
+    if (length(Xtmp) == 0) next
+    if (all(is.na(Xtmp))) next
+    if (any(!is.finite(Xtmp))) next  
+    if (sd(Xtmp, na.rm = TRUE) == 0) next
+    
+    #d$X <- scale(Xtmp, center = TRUE, scale = FALSE)
+    d$X <- Xtmp
+    
+    if (var(d$X, na.rm = TRUE) < 1e-10) next         
+    mm1 <- model.matrix(form1, data = d)
+    if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  
+    mm2 <- model.matrix(form2, data = d)
+    if (kappa(t(mm2) %*% mm2, exact = TRUE) > 1e12) next
+      
+      out.gls1 <- tryCatch(nlme::gls(
+        form1,
+        data = d,
+        correlation = corAR1(form = ~ annee | region)),
+        error = function(e) NULL)
+      
+      out.gls2 <- tryCatch(nlme::gls(
+        form2,
+        data = d, 
+        correlation = corAR1(form = ~ annee | region)),
+        error = function(e) NULL)
+      
+      if(!is.null(out.gls1) && !is.null(out.gls2)) {
+        
+        # test du modèle
+        aov <- anova(out.gls2, out.gls1)
+        
+        #choix de modèle
+        mod <- out.gls1
+        if (aov$`p-value`[2] < 0.05) {
+          mod <- out.gls2
+        }
+        
+        ## Hypothèses
+        # test de Jarque-Bera pour la normalité résiduelle
+        jb <- tseries::jarque.bera.test(resid(mod))
+        jb.p <- jb$p.value
+        
+        # test de breush-pagan pour l'homoscédasticité
+        res <- resid(mod, type = "pearson")
+        fit <- fitted(mod)
+        bp <- lmtest::bptest(res ~ fit)
+        bp.p <- bp$p.value
+        
+        # durbin-watson pour l'indep des résidus
+        res <- resid(mod)
+        dw <- lmtest::dwtest(res ~ 1)
+        dw.p <- dw$p.value
+        
+        if (bp.p > 0.05 & jb.p > 0.05){
+          best_model.2 <- mod
+          model_type <- "GLS"
+          
+          coef_Tab <- summary(best_model.2)$tTable[, c("Value", "p-value")]
+          df1.GLS <- data.frame(
+            variable = j,
+            model_choosen = "GLS",
+            forme = ifelse(identical(best_model.2, out.gls2), "quadratique", "lineaire"),
+            transformation = t,
+            betaX = coef_Tab[2,1],
+            p.value_betaX = coef_Tab[2,2],
+            betaX2 = ifelse(identical(best_model.2, out.gls2), coef_Tab[3,1], NA),
+            p.value_betaX2 = ifelse(identical(best_model.2, out.gls2), coef_Tab[3,2], NA),
+            phi = coef(best_model.2$modelStruct$corStruct, unconstrained = FALSE),
+            sigma_ind = NA,
+            sigma_res = as.numeric(summary(mod)$sigma),
+            stringsAsFactors = FALSE
+          )
+          
+          df2.GLS <- data.frame(
+            variable = j,
+            model = "GLS",
+            transformation = t,
+            p.value_DW_res = dw.p,
+            p.value_JB_res = jb.p,
+            p.value_BP_res = bp.p,
+            p.value_JB_random_res = NA,
+            respect_assumption = ifelse(bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05, "Yes", "No"),
+            AIC = stats::AIC(mod),
+            RMSE = rmse(mod, d$Y_norm)
+          )
+          
+          model_stats <- rbind(model_stats, df2.GLS)
+          model_param <- rbind(model_param, df1.GLS)
+        }
+        
+        df3.GLS <- data.frame(
           variable = j,
           model = "GLS",
+          forme = ifelse(identical(mod, out.gls2), "quadratique", "lineaire"),
           transformation = t,
           p.value_DW_res = dw.p,
           p.value_JB_res = jb.p,
@@ -337,17 +382,13 @@ for (j in var_to_test){
           p.value_JB_random_res = NA,
           respect_assumption = ifelse(bp.p > 0.05 & jb.p > 0.05 & dw.p > 0.05, "Yes", "No"),
           AIC = stats::AIC(mod),
-          RMSE = rmse(mod, d[[j]])
+          RMSE = rmse(mod, d$Y_norm)
         )
-        
-        model_stats <- rbind(model_stats, df2.GLS)
-        model_param <- rbind(model_param, df1.GLS)
+        Tab3 <- rbind(Tab3, df3.GLS)
       }
-    
-   }
-
   
   ### GEE
+
   if (var(d$X, na.rm = TRUE) < 1e-10) next         # Fix 3
   mm1 <- model.matrix(form1, data = d)
   if (kappa(t(mm1) %*% mm1, exact = TRUE) > 1e12) next  # Fix 1
@@ -363,7 +404,6 @@ for (j in var_to_test){
         std.err = "fij"),
         error = function(e) NULL
         )
-  if(is.null(out.gee1)) next
       
     out.gee2 <- tryCatch(geepack::geeglm(
         form2,
@@ -373,8 +413,8 @@ for (j in var_to_test){
         corstr = "ar1", 
         std.err = "fij"),
         error = function(e) NULL)
-  
-  if (is.null(out.gee2)) next
+    
+    if(!is.null(out.gee1) && !is.null(out.gee2)) {
       
       # test du modèle
       aov <- anova(out.gee1, out.gee2, test = "Wald")
@@ -391,7 +431,7 @@ for (j in var_to_test){
       dw <- lmtest::dwtest(res ~ 1)
       dw.p <- dw$p.value
       
-      if (dw.p < 0.05){
+      
         #message(j, "Transformation retenue (LMM) : ", t)
         best_model.3 <- mod
         model_type <- "GEE"
@@ -423,13 +463,32 @@ for (j in var_to_test){
           p.value_JB_random_res = NA,
           respect_assumption = ifelse(dw.p < 0.05, "Yes", "No"),
           AIC = geepack::QIC(best_model.3)[1],
-          RMSE = rmse(best_model.3, d[[j]])
+          RMSE = rmse(best_model.3, d$Y_norm)
         )
         
         model_stats <- rbind(model_stats, df2.GEE)
         model_param <- rbind(model_param, df1.GEE)
-      }
       
+      
+      df3.GEE <- data.frame(
+        variable = j,
+        model = "GEE",
+        forme = ifelse(identical(mod, out.gee2), "quadratique", "lineaire"),
+        transformation = "none",
+        p.value_DW_res = dw.p,
+        p.value_JB_res = NA,
+        p.value_BP_res = NA,
+        p.value_JB_random_res = NA,
+        respect_assumption = ifelse(dw.p < 0.05, "Yes", "No"),
+        AIC = geepack::QIC(mod)[1],
+        RMSE = rmse(mod, d$Y_norm)
+      )
+      Tab3 <- rbind(Tab3, df3.GEE)
+      
+      
+    }
+      
+     
       if (criteria == "RMSE"){
         best_index <- which.min(model_stats$RMSE)
         df2 <- model_stats[best_index,]
@@ -447,41 +506,53 @@ for (j in var_to_test){
 }
 
 if (save_excel == TRUE){
-  FonctionsUtiles::save_datasets_to_excel(datasets = list("summary" = Tab, "quality" = Tab2),
+  FonctionsUtiles::save_datasets_to_excel(datasets = list("summary" = Tab, "quality" = Tab2, comparaison = Tab3),
                                           file_name = paste0("C:/Users/g.martet/Documents/firstexploration/sel_var2_Y_", Y,".xlsx"))}
   
-  return(list(Tab, Tab2))
+  return(list(Tab, Tab2, Tab3))
 }
 
      
 # test
-res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", save_excel = TRUE)
-a <- res2[[1]]
-View(a)
-resb <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R")
-b <- resb[[1]]
-View(b)
+# res2 <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R", save_excel = TRUE)
+# a <- res2[[1]]
+# View(a)
 
-setdiff(var_to_test, res2[[1]]$variable)
+# resb <- results_model2(var_to_test = var_to_test, Y = "AMR_EHPAD_FQ_R")
+# b <- resb[[1]]
+# View(b)
+# 
+# setdiff(var_to_test, res2[[1]]$variable)
+# 
+# quality <- res2[[2]]
+# View(quality)
+# boxplot(quality$RMSE)
+# 
+# quality %>% 
+#   ggplot(aes(x = 1, y = RMSE)) +
+#   geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+#   geom_point(aes(group = variable),
+#              width = 0.1,
+#              show.legend = FALSE, 
+#              position = position_dodge(0.9)) +
+#   geom_text(data = quality %>% dplyr::filter(RMSE > 20), 
+#             aes(group = variable, label = variable),
+#             hjust = -0.1,
+#             show.legend = FALSE,
+#             position = position_dodge(0.9)) +
+#   theme_bw()
+#   
+# summary(quality$RMSE)  
 
-quality <- res2[[2]]
-View(quality)
-boxplot(quality$RMSE)
+# d <- dat[, c("AMR_EHPAD_FQ_R", "annee", "region", "EQI_st")]
+# d <- d[complete.cases(d), ]
+# out.gee <- geepack::geeglm(
+#   AMR_EHPAD_FQ_R ~ EQI_st,
+#   id = region, 
+#   #waves = annee, 
+#   data = d, 
+#   corstr = "ar1", 
+#   std.err = "fij")
+# 
+# summary(out.gee)
 
-quality %>% 
-  ggplot(aes(x = 1, y = RMSE)) +
-  geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
-  geom_point(aes(group = variable),
-             width = 0.1,
-             show.legend = FALSE, 
-             position = position_dodge(0.9)) +
-  geom_text(data = quality %>% dplyr::filter(RMSE > 20), 
-            aes(group = variable, label = variable),
-            hjust = -0.1,
-            show.legend = FALSE,
-            position = position_dodge(0.9)) +
-  theme_bw()
-  
-summary(quality$RMSE)  
-  
-  
