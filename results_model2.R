@@ -119,6 +119,7 @@ for (j in var_to_test){
   
   # normalisation du Y
   #print(j)
+  set.seed(123)
   normal_y <- bestNormalize::bestNormalize(d[[Y]])
   d$Y_norm <- predict(normal_y)
   t <- names(which.min(normal_y$norm_stats))
